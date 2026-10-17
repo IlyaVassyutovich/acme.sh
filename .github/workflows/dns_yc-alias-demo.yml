@@ -44,10 +44,12 @@ jobs:
       - name: Issue demo.iv.fyi via --domain-alias acme-alias.iv.fyi
         # Debug level 1 logs the request bodies (record names); level 2 would
         # also log the signed JWT, which is exchangeable for an IAM token.
+        # dnssleep outlasts the 120s TXT TTL dns_yc sets, else LE's resolvers
+        # still serve the previous job's value from cache.
         run: |
           "$HOME/.acme.sh/acme.sh" --issue --server letsencrypt_test \
             -d demo.iv.fyi --domain-alias acme-alias.iv.fyi \
-            --dns dns_yc --dnssleep 30 --debug 2>&1 | tee issue.log
+            --dns dns_yc --dnssleep 150 --debug 2>&1 | tee issue.log
           exit "${PIPESTATUS[0]}"
       - name: Record names sent to the API
         if: always()
