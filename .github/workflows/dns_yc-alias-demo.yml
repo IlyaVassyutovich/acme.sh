@@ -51,4 +51,5 @@ jobs:
           exit "${PIPESTATUS[0]}"
       - name: Record names sent to the API
         if: always()
-        run: grep -o '"\(merges\|deletions\)": \[ { "name":"[^"]*"' issue.log || true
+        run: |
+          grep -o '"\(merges\|deletions\)": \[ { "name":"[^"]*"' issue.log || true
