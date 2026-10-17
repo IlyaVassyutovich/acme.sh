@@ -1,0 +1,54 @@
+# Fork-only demo, not part of the upstream PR. The stock DNS test never puts
+# the TXT record at a zone apex, so it passes on the unfixed dns_yc too; this
+# issues through --domain-alias pointing at a dedicated zone, where it breaks.
+name: dns_yc alias demo
+on:
+  push:
+    branches:
+      - dns_yc-alias-demo
+  workflow_dispatch:
+
+jobs:
+  alias:
+    name: ${{ matrix.code }} / ${{ matrix.mode }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      # Every job writes the same TXT record set
+      max-parallel: 1
+      matrix:
+        code: [baseline, fixed]
+        mode: [YC_Zone_ID, YC_Folder_ID]
+        include:
+          - code: baseline
+            sha: c472636bae255f1772448c0ff5c3c2ac57f069fd
+          - code: fixed
+            sha: cdcef166080c0ec61e7922d69840af6d0c22048f
+    env:
+      YC_SA_ID: ${{ secrets.TokenValue2 }}
+      YC_SA_Key_ID: ${{ secrets.TokenValue3 }}
+      YC_SA_Key_File_PEM_b64: ${{ secrets.TokenValue4 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.sha }}
+      - name: Select zone lookup mode
+        run: |
+          if [ "${{ matrix.mode }}" = YC_Zone_ID ]; then
+            echo "YC_Zone_ID=${{ secrets.YC_ALIAS_ZONE_ID }}" >>"$GITHUB_ENV"
+          else
+            echo "YC_Folder_ID=${{ secrets.TokenValue1 }}" >>"$GITHUB_ENV"
+          fi
+      - name: Install
+        run: ./acme.sh --install --nocron --noprofile --home "$HOME/.acme.sh"
+      - name: Issue demo.iv.fyi via --domain-alias acme-alias.iv.fyi
+        # Debug level 1 logs the request bodies (record names); level 2 would
+        # also log the signed JWT, which is exchangeable for an IAM token.
+        run: |
+          "$HOME/.acme.sh/acme.sh" --issue --server letsencrypt_test \
+            -d demo.iv.fyi --domain-alias acme-alias.iv.fyi \
+            --dns dns_yc --dnssleep 30 --debug 2>&1 | tee issue.log
+          exit "${PIPESTATUS[0]}"
+      - name: Record names sent to the API
+        if: always()
+        run: grep -o '"\(merges\|deletions\)": \[ { "name":"[^"]*"' issue.log || true
